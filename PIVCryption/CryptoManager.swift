@@ -6,11 +6,14 @@
 //
 import SwiftUI
 import Security
+import Foundation
 
 class CryptoManager: ObservableObject {
     @Published var encryptedMessage: Data? = nil
     @Published var decryptedMessage: String? = nil
+    @Published var tokens: [[String: Any]] = []
     let PRIVATE_KEY_TAG = "com.example.privatekey".data(using: .utf8)!
+    let YUBICO_AUTHENTICATOR_TOKEN = "com.yubico.Authenticator.TokenExtension:972BC027C9E349CFA63856C2A2968F16ABDDE71564A94570EE131DEA92E9BB0F".data(using: .utf8)!
     
     func encryptMessage(_ message: String) {
         guard let privateKey = getPrivateKey() else {
@@ -71,11 +74,88 @@ class CryptoManager: ObservableObject {
         }
     }
     
+    func fetchTokens() {
+        let query: [String: Any] = [
+            kSecAttrAccessGroup as String: kSecAttrAccessGroupToken,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+            kSecClass as String: kSecClassIdentity,
+            kSecReturnAttributes as String: kCFBooleanTrue as Any,
+            kSecReturnRef as String: kCFBooleanTrue as Any,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnPersistentRef as String: kCFBooleanTrue as Any
+        ]
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        if status == errSecSuccess, let items = result as? [[String: Any]] {
+            DispatchQueue.main.async {
+                self.tokens = items
+            }
+        } else {
+            let errorDescription = SecCopyErrorMessageString(status, nil)
+            print("Error fetching tokens: \(errorDescription ?? "Unknown error" as CFString)")
+            DispatchQueue.main.async {
+                self.tokens = []
+            }
+        }
+    }
+    
+    func parseTokens(from response: [[String: Any]]) -> [Token] {
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: response, options: [])
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            
+            let tokens = try decoder.decode([Token].self, from: jsonData)
+            return tokens
+        } catch {
+            print("Error decoding tokens: \(error)")
+            return []
+        }
+    }
+
+
+    func preprocessTokenResponse(_ response: [[String: Any]]) -> [[String: Any]] {
+        let iso8601Formatter = ISO8601DateFormatter()
+        
+        return response.map { dictionary in
+            var newDict = [String: Any]()
+            
+            for (key, value) in dictionary {
+                switch value {
+                case let stringValue as String:
+                    newDict[key] = stringValue
+                case let dataValue as Data:
+                    newDict[key] = dataValue.base64EncodedString()
+                case let dateValue as Date:
+                    newDict[key] = iso8601Formatter.string(from: dateValue)
+                case is SecAccessControl, is SecIdentity, is SecKey:
+                    print("Skipping unsupported CoreFoundation type for key '\(key)'")
+                case let nestedDict as [String: Any]:
+                    newDict[key] = preprocessTokenResponse([nestedDict]).first
+                case is NSNull:
+                    newDict[key] = nil
+                default:
+                    newDict[key] = value
+                }
+            }
+            
+            // Ensure UUID exists
+            if newDict["UUID"] == nil {
+                newDict["UUID"] = UUID().uuidString  // Generate a new UUID if missing
+            }
+            
+            return newDict
+        }
+    }
+    
     // Returns only the private key reference
     private func getPrivateKey() -> SecKey? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
             kSecAttrApplicationTag as String: PRIVATE_KEY_TAG,
+            //kSecAttrApplicationTag as String: YUBICO_AUTHENTICATOR_TOKEN,
             kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
             kSecReturnRef as String: true
         ]
