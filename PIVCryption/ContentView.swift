@@ -13,13 +13,16 @@ struct ContentView: View {
                         // Display selected token
                         Text("Selected Certificate:")
                             .font(.headline)
-                        Text(selected.description)
-                            .padding()
-                            .lineLimit(3)
-                    } else {
-                        Text("No token selected")
-                            .padding()
-                    }
+                        Text("Name: \(getCertLabel(items: [selected])!)")
+                            .font(.subheadline)
+                            .lineLimit(1)
+                        Text("TokenId: \(getCertTokenId(items: [selected])!)")
+                            .font(.subheadline)
+                            .lineLimit(4)
+                        } else {
+                            Text("No token selected")
+                                .padding()
+                        }
                     
                     Button("Select Certificate/Token") {
                         cryptoManager.fetchTokens()
@@ -62,6 +65,22 @@ struct ContentView: View {
     //            cryptoManager.generateKeyPair()
     //        }
         }
+    }
+    
+    func getCertLabel(items: [[String: Any]]) -> String? {
+        // Preprocess the raw response
+        let cryptoMgr = CryptoManager()
+        let preprocessedResponse = cryptoMgr.preprocessTokenResponse(items)
+        let tokens = cryptoMgr.parseTokens(from: preprocessedResponse)
+        return tokens[0].label
+    }
+    
+    func getCertTokenId(items: [[String: Any]]) -> String? {
+        // Preprocess the raw response
+        let cryptoMgr = CryptoManager()
+        let preprocessedResponse = cryptoMgr.preprocessTokenResponse(items)
+        let tokens = cryptoMgr.parseTokens(from: preprocessedResponse)
+        return tokens[0].tkid
     }
 }
 

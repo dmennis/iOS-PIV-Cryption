@@ -90,6 +90,7 @@ class CryptoManager: ObservableObject {
         
         if status == errSecSuccess, let items = result as? [[String: Any]] {
             DispatchQueue.main.async {
+                print("Found [\(items.count)] token(s) in the keychain")
                 self.tokens = items
             }
         } else {
