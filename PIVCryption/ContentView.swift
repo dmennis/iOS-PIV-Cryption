@@ -4,6 +4,7 @@ import Security
 let PRIVATE_KEY_TAG = "com.yubikit.pivcryption.privatekey".data(using: .utf8)!
 
 struct ContentView: View {
+    @StateObject private var cryptoManager = CryptoManager()
     @State private var message: String = ""
     @State private var encryptedMessage: Data? = nil
     @State private var decryptedMessage: String? = nil
@@ -15,20 +16,21 @@ struct ContentView: View {
                 .padding()
 
             Button("Encrypt Message") {
-                encryptMessage()
+                cryptoManager.encryptMessage(message)
             }
             .disabled(message.isEmpty)
 
-            if let encrypted = encryptedMessage {
+            if let encrypted = cryptoManager.encryptedMessage {
                 Text("Encrypted Message: \(encrypted.base64EncodedString())")
+                    .font(Font.system(size: 10.0))
             }
 
             Button("Decrypt Message") {
-                decryptMessage()
+                cryptoManager.decryptMessage()
             }
-            .disabled(encryptedMessage == nil)
+            .disabled(cryptoManager.encryptedMessage == nil)
 
-            if let decrypted = decryptedMessage {
+            if let decrypted = cryptoManager.decryptedMessage {
                 Text("Decrypted Message: \(decrypted)")
             }
         }
