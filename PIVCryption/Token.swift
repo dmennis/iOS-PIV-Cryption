@@ -1,0 +1,56 @@
+//
+//  Untitled.swift
+//  PIVCryption
+//
+//  Created by Dennis Hills on 1/10/25.
+//
+import Foundation
+
+// MARK: - Token Struct
+struct Token: Codable, Identifiable {
+    var id: UUID
+    let label: String?
+    let subject: Data?
+    let startDate: Date?
+    let creationDate: Date?
+    let sign: Bool?
+    let decrypt: Bool?
+    let tkid: String?
+    let keySize: Int?
+    let certificateSize: Int?
+    
+    // Added decoding to handle Base64-encoded strings
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        id = try container.decode(UUID.self, forKey: .id)
+        label = try container.decodeIfPresent(String.self, forKey: .label)
+        tkid = try container.decodeIfPresent(String.self, forKey: .tkid)
+        startDate = try container.decodeIfPresent(Date.self, forKey: .startDate)
+        creationDate = try container.decodeIfPresent(Date.self, forKey: .creationDate)
+        sign = try container.decodeIfPresent(Bool.self, forKey: .sign)
+        decrypt = try container.decodeIfPresent(Bool.self, forKey: .decrypt)
+        keySize = try container.decodeIfPresent(Int.self, forKey: .keySize)
+        certificateSize = try container.decodeIfPresent(Int.self, forKey: .certificateSize)
+        
+        if let base64String = try container.decodeIfPresent(String.self, forKey: .subject) {
+            subject = Data(base64Encoded: base64String)
+        } else {
+            subject = nil
+        }
+    }
+    
+    // MARK: Coding Keys
+    enum CodingKeys: String, CodingKey {
+        case id = "UUID"
+        case label = "labl"
+        case tkid = "tkid"
+        case subject = "subj"
+        case startDate = "sdat"
+        case creationDate = "cdat"
+        case sign = "sign"
+        case decrypt = "decr"
+        case keySize = "esiz"
+        case certificateSize = "bsiz"
+    }
+}

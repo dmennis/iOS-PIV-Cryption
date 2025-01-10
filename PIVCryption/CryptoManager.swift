@@ -12,9 +12,9 @@ class CryptoManager: ObservableObject {
     @Published var encryptedMessage: Data? = nil
     @Published var decryptedMessage: String? = nil
     @Published var tokens: [[String: Any]] = []
-    let PRIVATE_KEY_TAG = "com.example.privatekey".data(using: .utf8)!
-    let YUBICO_AUTHENTICATOR_TOKEN = "com.yubico.Authenticator.TokenExtension:972BC027C9E349CFA63856C2A2968F16ABDDE71564A94570EE131DEA92E9BB0F".data(using: .utf8)!
-    
+//    let PRIVATE_KEY_TAG = "com.example.privatekey".data(using: .utf8)!
+//    let YUBICO_AUTHENTICATOR_TOKEN = "com.yubico.Authenticator.TokenExtension:972BC027C9E349CFA63856C2A2968F16ABDDE71564A94570EE131DEA92E9BB0F".data(using: .utf8)!
+//    
     func encryptMessage(_ message: String) {
         guard let privateKey = getPrivateKey() else {
             print("Private key unavailable.")
@@ -74,34 +74,6 @@ class CryptoManager: ObservableObject {
         }
     }
     
-    func fetchTokens() {
-        let query: [String: Any] = [
-            kSecAttrAccessGroup as String: kSecAttrAccessGroupToken,
-            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
-            kSecClass as String: kSecClassIdentity,
-            kSecReturnAttributes as String: kCFBooleanTrue as Any,
-            kSecReturnRef as String: kCFBooleanTrue as Any,
-            kSecMatchLimit as String: kSecMatchLimitAll,
-            kSecReturnPersistentRef as String: kCFBooleanTrue as Any
-        ]
-        
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        
-        if status == errSecSuccess, let items = result as? [[String: Any]] {
-            DispatchQueue.main.async {
-                print("Found [\(items.count)] token(s) in the keychain")
-                self.tokens = items
-            }
-        } else {
-            let errorDescription = SecCopyErrorMessageString(status, nil)
-            print("Error fetching tokens: \(errorDescription ?? "Unknown error" as CFString)")
-            DispatchQueue.main.async {
-                self.tokens = []
-            }
-        }
-    }
-    
     // Returns only the private key reference
     private func getPrivateKey() -> SecKey? {
         let query: [String: Any] = [
@@ -124,6 +96,7 @@ class CryptoManager: ObservableObject {
     }
 
     // TODO: Remove after testing
+    // This generates a new keypair in the local iOS keychain but only available/visible to this application?
     func generateKeyPair() -> (SecKey?, SecKey?) {
         let attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
@@ -167,5 +140,63 @@ class CryptoManager: ObservableObject {
             print("Error exporting public key: \(error?.takeRetainedValue().localizedDescription ?? "Unknown error")")
             return nil
         }
+    }
+    
+    func getPublicKey(certificate: SecCertificate) -> SecKey? {
+        let publicKey = SecCertificateCopyKey(certificate)
+        return publicKey
+    }
+    
+    // Tokens/Certificates
+    // Fetch tokens from iOS Keychain
+    func fetchTokens() {
+        let query: [String: Any] = [
+            kSecAttrAccessGroup as String: kSecAttrAccessGroupToken,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+            kSecClass as String: kSecClassIdentity,
+            kSecReturnAttributes as String: kCFBooleanTrue as Any,
+            kSecReturnRef as String: kCFBooleanTrue as Any,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnPersistentRef as String: kCFBooleanTrue as Any
+        ]
+        
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        if status == errSecSuccess, let items = result as? [[String: Any]] {
+            DispatchQueue.main.async {
+                print("Found [\(items.count)] token(s) in the keychain")
+                self.tokens = items
+                self.parseTokens(tokens: items)
+            }
+        } else {
+            let errorDescription = SecCopyErrorMessageString(status, nil)
+            print("Error fetching tokens: \(errorDescription ?? "Unknown error" as CFString)")
+            DispatchQueue.main.async {
+                self.tokens = []
+            }
+        }
+    }
+    
+    func parseTokens(tokens: [[String: Any]]) {
+        print("Parsing tokens...")
+        
+        var tokenCount = 0
+        tokens.forEach { item in
+            tokenCount+=1
+            guard let certData = item["certdata"] as? Data else { return }
+            guard let certificate = SecCertificateCreateWithData(nil, certData as CFData) else { return }
+            print("\nToken \(tokenCount) of \(tokens.count)")
+            print("Name: \(certificate.commonName)")
+            print("TokenObjectId: \(certificate.tokenObjectId())")
+            print(item)
+            //let secIdentity = item["v_Ref"] as! SecIdentity
+        }
+    }
+    
+    func getCertDetails(item: [String: Any]) -> SecCertificate? {
+        guard let certData = item["certdata"] as? Data else { return nil }
+        guard let certificate = SecCertificateCreateWithData(nil, certData as CFData) else { return nil }
+        return certificate
     }
 }
