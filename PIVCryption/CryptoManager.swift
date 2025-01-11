@@ -21,7 +21,7 @@ class CryptoManager: ObservableObject {
             print("Private key unavailable.")
             return
         }
-
+        
         do {
             guard let messageData = message.data(using: .utf8) else {
                 print("Invalid message encoding.")
@@ -37,10 +37,6 @@ class CryptoManager: ObservableObject {
         } catch {
             print("Encryption error: \(error)")
         }
-    }
-    
-    func encryptMessageUsingToken() {
-        
     }
     
     func decryptMessage() {
@@ -79,6 +75,31 @@ class CryptoManager: ObservableObject {
         }
     }
     
+    // Encrypt using CryptoTokenKit tokens
+    func encryptMessageUsingToken(_ message: String) {
+        guard let privateKey = getPrivateKeyFromToken() else {
+            print("Private key unavailable.")
+            return
+        }
+
+        do {
+            guard let messageData = message.data(using: .utf8) else {
+                print("Invalid message encoding.")
+                return
+            }
+
+            let publicKey = SecKeyCopyPublicKey(privateKey)
+            if let encryptedData = SecKeyCreateEncryptedData(publicKey!, .rsaEncryptionOAEPSHA256, messageData as CFData, nil) as Data? {
+                self.encryptedMessage = encryptedData
+            } else {
+                throw NSError(domain: "EncryptionError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to encrypt data."])
+            }
+        } catch {
+            print("Encryption error: \(error)")
+        }
+    }
+    
+    // Decrypt using CryptoTokenKit tokens
     func decryptMessageUsingToken() {
         
         guard let privateKey = getPrivateKeyFromToken() else {
@@ -116,31 +137,45 @@ class CryptoManager: ObservableObject {
         }
     }
     
-    private func getPrivateKeyFromToken() -> SecKey? {
-        var privateKey: SecKey?
-        
-        return privateKey
-    }
-        
-    // Returns only the private key reference
-        private func getPrivateKey() -> SecKey? {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassKey,
-                kSecAttrApplicationTag as String: PRIVATE_KEY_TAG,
-                kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
-                kSecReturnRef as String: true
-            ]
+    // Returns only the private key reference based on PRIVATE KEY TAG
+    private func getPrivateKey() -> SecKey? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: PRIVATE_KEY_TAG,
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+            kSecReturnRef as String: true
+        ]
 
-            var item: CFTypeRef?
-            let status = SecItemCopyMatching(query as CFDictionary, &item)
-            if status == errSecSuccess {
-                let privateKey = item as! SecKey
-                return privateKey
-            } else {
-                print("Private key not found or error: \(status)")
-                return nil
-            }
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecSuccess {
+            let privateKey = item as! SecKey
+            return privateKey
+        } else {
+            print("Private key not found or error: \(status)")
+            return nil
         }
+    }
+    
+    // Returns the correct private key as of 5:03p on Jan 10, 2025
+    private func getPrivateKeyFromToken() -> SecKey? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrTokenID as String: "com.yubico.Authenticator.TokenExtension:972BC027C9E349CFA63856C2A2968F16ABDDE71564A94570EE131DEA92E9BB0F",
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+            kSecReturnRef as String: true
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecSuccess {
+            let privateKey = item as! SecKey
+            return privateKey
+        } else {
+            print("Private key not found or error: \(status)")
+            return nil
+        }
+    }
 
     // TODO: Remove after testing
     // This generates a new keypair in the local iOS keychain but only available/visible to this application?

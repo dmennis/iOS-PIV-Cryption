@@ -47,6 +47,11 @@ struct ContentView: View {
                 cryptoManager.encryptMessage(message)
             }
             .disabled(message.isEmpty)
+            
+            Button("Encrypt Message (Token)") {
+                cryptoManager.encryptMessageUsingToken(message)
+            }
+            .disabled(message.isEmpty)
 
             if let encrypted = cryptoManager.encryptedMessage {
                 Text("Encrypted Message: \(encrypted.base64EncodedString())")
@@ -55,6 +60,11 @@ struct ContentView: View {
 
             Button("Decrypt Message") {
                 cryptoManager.decryptMessage()
+            }
+            .disabled(cryptoManager.encryptedMessage == nil)
+            
+            Button("Decrypt Message (Token)") {
+                cryptoManager.decryptMessageUsingToken()
             }
             .disabled(cryptoManager.encryptedMessage == nil)
 
