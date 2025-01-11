@@ -12,6 +12,7 @@ class CryptoManager: ObservableObject {
     @Published var encryptedMessage: Data? = nil
     @Published var decryptedMessage: String? = nil
     @Published var tokens: [[String: Any]] = []
+    let PRIVATE_KEY_TAG = "com.yubikit.pivcryption.privatekey".data(using: .utf8)!
 //    let PRIVATE_KEY_TAG = "com.example.privatekey".data(using: .utf8)!
 //    let YUBICO_AUTHENTICATOR_TOKEN = "com.yubico.Authenticator.TokenExtension:972BC027C9E349CFA63856C2A2968F16ABDDE71564A94570EE131DEA92E9BB0F".data(using: .utf8)!
 //    
@@ -38,20 +39,24 @@ class CryptoManager: ObservableObject {
         }
     }
     
+    func encryptMessageUsingToken() {
+        
+    }
+    
     func decryptMessage() {
         guard let privateKey = getPrivateKey() else {
             print("Decryption failed: Private key not found.")
             return
         }
-
+        
         guard let encryptedMessage = encryptedMessage else {
             print("Decryption failed: Encrypted message is nil.")
             return
         }
-
+        
         do {
             print("Encrypted (ciphertext) Message (base64Encoded): \(encryptedMessage.base64EncodedString())")
-
+            
             if let decryptedData = SecKeyCreateDecryptedData(privateKey, .rsaEncryptionOAEPSHA256, encryptedMessage as CFData, nil) as Data? {
                 
                 print("Decrypted raw data bytes: \(decryptedData.map { String(format: "%02x", $0) }.joined())")
@@ -74,26 +79,68 @@ class CryptoManager: ObservableObject {
         }
     }
     
-    // Returns only the private key reference
-    private func getPrivateKey() -> SecKey? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: PRIVATE_KEY_TAG,
-            //kSecAttrApplicationTag as String: YUBICO_AUTHENTICATOR_TOKEN,
-            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
-            kSecReturnRef as String: true
-        ]
-
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecSuccess {
-            let privateKey = item as! SecKey
-            return privateKey
-        } else {
-            print("Private key not found or error: \(status)")
-            return nil
+    func decryptMessageUsingToken() {
+        
+        guard let privateKey = getPrivateKeyFromToken() else {
+            print("Decryption failed: Private key not found.")
+            return
+        }
+        
+        guard let encryptedMessage = encryptedMessage else {
+            print("Decryption failed: Encrypted message is nil.")
+            return
+        }
+        
+        do {
+            print("Encrypted (ciphertext) Message (base64Encoded): \(encryptedMessage.base64EncodedString())")
+            
+            if let decryptedData = SecKeyCreateDecryptedData(privateKey, .rsaEncryptionOAEPSHA256, encryptedMessage as CFData, nil) as Data? {
+                
+                print("Decrypted raw data bytes: \(decryptedData.map { String(format: "%02x", $0) }.joined())")
+                
+                // Attempt to decode as UTF-8
+                if let decryptedString = String(data: decryptedData, encoding: .utf8) {
+                    self.decryptedMessage = decryptedString
+                    print("Decryption succeeded with message: \(decryptedString)")
+                } else {
+                    print("Decryption succeeded but data is not a UTF-8 string.")
+                }
+            } else {
+                print("Decryption failed: SecKeyCreateDecryptedData returned nil.")
+                if let error = SecCopyErrorMessageString(errSecParam, nil) {
+                    print("Error: \(error)")
+                }
+            }
+        } catch {
+            print("Decryption error: \(error)")
         }
     }
+    
+    private func getPrivateKeyFromToken() -> SecKey? {
+        var privateKey: SecKey?
+        
+        return privateKey
+    }
+        
+    // Returns only the private key reference
+        private func getPrivateKey() -> SecKey? {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassKey,
+                kSecAttrApplicationTag as String: PRIVATE_KEY_TAG,
+                kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+                kSecReturnRef as String: true
+            ]
+
+            var item: CFTypeRef?
+            let status = SecItemCopyMatching(query as CFDictionary, &item)
+            if status == errSecSuccess {
+                let privateKey = item as! SecKey
+                return privateKey
+            } else {
+                print("Private key not found or error: \(status)")
+                return nil
+            }
+        }
 
     // TODO: Remove after testing
     // This generates a new keypair in the local iOS keychain but only available/visible to this application?
@@ -123,24 +170,24 @@ class CryptoManager: ObservableObject {
     
     // TODO: Testing export of this generated pk to share with another user
     // So they can send encrypted messages (encrypted with this pk) and then decrypted with the private key that only exists on this device.
-    private func exportPublicKey() -> String? {
-        guard let privateKey = getPrivateKey() else {
-            print("Private key not found.")
-            return nil
-        }
-        guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
-            print("Public key could not be retrieved.")
-            return nil
-        }
-        
-        var error: Unmanaged<CFError>?
-        if let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? {
-            return publicKeyData.base64EncodedString()
-        } else {
-            print("Error exporting public key: \(error?.takeRetainedValue().localizedDescription ?? "Unknown error")")
-            return nil
-        }
-    }
+//    private func exportPublicKey() -> String? {
+//        guard let privateKey = getPrivateKey() else {
+//            print("Private key not found.")
+//            return nil
+//        }
+//        guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
+//            print("Public key could not be retrieved.")
+//            return nil
+//        }
+//        
+//        var error: Unmanaged<CFError>?
+//        if let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? {
+//            return publicKeyData.base64EncodedString()
+//        } else {
+//            print("Error exporting public key: \(error?.takeRetainedValue().localizedDescription ?? "Unknown error")")
+//            return nil
+//        }
+//    }
     
     func getPublicKey(certificate: SecCertificate) -> SecKey? {
         let publicKey = SecCertificateCopyKey(certificate)
