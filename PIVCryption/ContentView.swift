@@ -5,7 +5,6 @@ struct ContentView: View {
     @StateObject private var cryptoManager = CryptoManager()
     @State private var message: String = ""
     @State private var encryptedMessage: Data? = nil
-    @State private var decryptedMessage: String? = nil
     
     // Token/Certificate dialog
     @State private var isShowingTokenDialog = false
@@ -43,10 +42,10 @@ struct ContentView: View {
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .padding()
 
-            Button("Encrypt Message") {
-                cryptoManager.encryptMessage(message)
-            }
-            .disabled(message.isEmpty)
+//            Button("Encrypt Message") {
+//                cryptoManager.encryptMessage(message)
+//            }
+//            .disabled(message.isEmpty)
             
             Button("Encrypt Message (Token)") {
                 cryptoManager.encryptMessageUsingToken(message)
@@ -54,14 +53,14 @@ struct ContentView: View {
             .disabled(message.isEmpty)
 
             if let encrypted = cryptoManager.encryptedMessage {
-                Text("Encrypted Message: \(encrypted.base64EncodedString())")
-                    .font(Font.system(size: 10.0))
+                Text("Encrypted Message:\n\(encrypted.base64EncodedString())")
+                    .font(Font.system(size: 7.0))
             }
 
-            Button("Decrypt Message") {
-                cryptoManager.decryptMessage()
-            }
-            .disabled(cryptoManager.encryptedMessage == nil)
+//            Button("Decrypt Message") {
+//                cryptoManager.decryptMessage()
+//            }
+//            .disabled(cryptoManager.encryptedMessage == nil)
             
             Button("Decrypt Message (Token)") {
                 cryptoManager.decryptMessageUsingToken()
@@ -69,7 +68,8 @@ struct ContentView: View {
             .disabled(cryptoManager.encryptedMessage == nil)
 
             if let decrypted = cryptoManager.decryptedMessage {
-                Text("Decrypted Message: \(decrypted)")
+                Text("Decrypted Message:\n\(decrypted)")
+                    .lineLimit(2)
             }
         }
         .navigationTitle("")

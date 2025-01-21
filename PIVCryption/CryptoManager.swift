@@ -7,6 +7,7 @@
 import SwiftUI
 import Security
 import Foundation
+import Combine
 
 class CryptoManager: ObservableObject {
     @Published var encryptedMessage: Data? = nil
@@ -21,7 +22,6 @@ class CryptoManager: ObservableObject {
             print("Private key unavailable.")
             return
         }
-        
         do {
             guard let messageData = message.data(using: .utf8) else {
                 print("Invalid message encoding.")
@@ -75,7 +75,7 @@ class CryptoManager: ObservableObject {
         }
     }
     
-    // Encrypt using CryptoTokenKit tokens
+    // Encrypt using CryptoTokenKit token
     func encryptMessageUsingToken(_ message: String) {
         guard let privateKey = getPrivateKeyFromToken() else {
             print("Private key unavailable.")
@@ -99,7 +99,10 @@ class CryptoManager: ObservableObject {
         }
     }
     
-    // Decrypt using CryptoTokenKit tokens
+    // Decrypt cipher data using CryptoTokenKit token
+    // We can find the private key reference from YA but when calling SecKeyCreateDecryptedData, the YA is not called
+    // If we change SecKeyCreateDecryptedData --> SecKeyCreateSignature it calls YA app. Currently, the YA app has been modified
+    // to handle decryption inside create signature 'handleTokenRequest' function in the TokenRequestViewModel in the YA app project
     func decryptMessageUsingToken() {
         
         guard let privateKey = getPrivateKeyFromToken() else {
@@ -115,8 +118,8 @@ class CryptoManager: ObservableObject {
         do {
             print("Encrypted (ciphertext) Message (base64Encoded): \(encryptedMessage.base64EncodedString())")
             
-            if let decryptedData = SecKeyCreateDecryptedData(privateKey, .rsaEncryptionOAEPSHA256, encryptedMessage as CFData, nil) as Data? {
-                
+            //if let decryptedData = SecKeyCreateDecryptedData(privateKey, .rsaEncryptionOAEPSHA256, encryptedMessage as CFData, nil) as Data? {
+            if let decryptedData = SecKeyCreateSignature(privateKey, .rsaEncryptionOAEPSHA256, encryptedMessage as CFData, nil) as Data? {
                 print("Decrypted raw data bytes: \(decryptedData.map { String(format: "%02x", $0) }.joined())")
                 
                 // Attempt to decode as UTF-8
@@ -157,7 +160,7 @@ class CryptoManager: ObservableObject {
         }
     }
     
-    // Returns the correct private key as of 5:03p on Jan 10, 2025
+    // Returns the correct private key - HARDCODED
     private func getPrivateKeyFromToken() -> SecKey? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
@@ -230,7 +233,7 @@ class CryptoManager: ObservableObject {
     }
     
     // Tokens/Certificates
-    // Fetch tokens from iOS Keychain
+    // Fetch all com.apple.token tokens saved to the iOS Keychain
     func fetchTokens() {
         let query: [String: Any] = [
             kSecAttrAccessGroup as String: kSecAttrAccessGroupToken,
@@ -260,6 +263,7 @@ class CryptoManager: ObservableObject {
         }
     }
     
+    // Parse the token response
     func parseTokens(tokens: [[String: Any]]) {
         print("Parsing tokens...")
         
