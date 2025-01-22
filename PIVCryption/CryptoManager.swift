@@ -179,61 +179,39 @@ class CryptoManager: ObservableObject {
             return nil
         }
     }
-
-    // TODO: Remove after testing
-    // This generates a new keypair in the local iOS keychain but only available/visible to this application?
-    func generateKeyPair() -> (SecKey?, SecKey?) {
-        let attributes: [String: Any] = [
-            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
-            kSecAttrKeySizeInBits as String: 2048,
-            kSecPrivateKeyAttrs as String: [
-                kSecAttrIsPermanent as String: true,
-                kSecAttrApplicationTag as String: PRIVATE_KEY_TAG
-            ]
-        ]
+    
+    func getPublicKeyFromToken() -> SecKey? {
+        //var publicKey: SecKey? = nil
         
-        var error: Unmanaged<CFError>?
-        guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error) else {
-            if let err = error?.takeRetainedValue() {
-                print("Error generating key pair: \(err.localizedDescription)")
-            }
-            return (nil, nil)
+        guard let privateKey = getPrivateKeyFromToken() else {
+            print("Private key not found.")
+            return nil
         }
         
-        let publicKey = SecKeyCopyPublicKey(privateKey)
-        
-        print("Key pair generated successfully")
-        return (privateKey, publicKey)
-    }
-    
-    // TODO: Testing export of this generated pk to share with another user
-    // So they can send encrypted messages (encrypted with this pk) and then decrypted with the private key that only exists on this device.
-//    private func exportPublicKey() -> String? {
-//        guard let privateKey = getPrivateKey() else {
-//            print("Private key not found.")
-//            return nil
-//        }
-//        guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
-//            print("Public key could not be retrieved.")
-//            return nil
-//        }
-//        
+        guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
+            print("Public key could not be retrieved.")
+            return nil
+        }
+        // If we ever want to export the publicKey as base64encoded string
 //        var error: Unmanaged<CFError>?
 //        if let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? {
 //            return publicKeyData.base64EncodedString()
 //        } else {
-//            print("Error exporting public key: \(error?.takeRetainedValue().localizedDescription ?? "Unknown error")")
+//            print("Error exporting public key: \(error?.takeRetainedValue().localizedDescription ?? "Unknown error exporting public key")")
 //            return nil
 //        }
-//    }
+        return publicKey
+    }
     
-    func getPublicKey(certificate: SecCertificate) -> SecKey? {
-        let publicKey = SecCertificateCopyKey(certificate)
+    func getPublicKeyFromCertificate(certificate: SecCertificate) -> SecKey? {
+        guard let publicKey = SecCertificateCopyKey(certificate) else {
+            return nil
+        }
         return publicKey
     }
     
     // Tokens/Certificates
-    // Fetch all com.apple.token tokens saved to the iOS Keychain
+    // Fetch all com.apple.token tokens saved to the iOS Keychain by any 3rd party app
     func fetchTokens() {
         let query: [String: Any] = [
             kSecAttrAccessGroup as String: kSecAttrAccessGroupToken,

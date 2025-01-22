@@ -9,107 +9,109 @@ struct ContentView: View {
     // Token/Certificate dialog
     @State private var isShowingTokenDialog = false
     @State private var selectedItem: [String: Any]? = nil
+    
+    func clearMessage() {
+        self.message = ""
+    }
 
     var body: some View {
-        VStack(spacing: 20) {
-            if let selected = selectedItem {
-                // Display selected token
-                Text("Selected Certificate:")
-                    .font(.headline)
-                Text("Name:")
-                    .font(.headline)
-                Text("\(cryptoManager.getCertDetails(item: selectedItem!)!.commonName)")
-                    .font(.subheadline)
-                    .lineLimit(1)
-                Text("TokenId:")
-                    .font(.headline)
-                Text("\(cryptoManager.getCertDetails(item: selectedItem!)!.tokenObjectId())")
-                    .font(.subheadline)
-                    .lineLimit(2)
-                } else {
-                    Text("No token selected")
-                        .padding()
-                }
-            
+        VStack(spacing: 15) {
             Button("Select Certificate/Token") {
                 cryptoManager.fetchTokens()
                 isShowingTokenDialog = true
             }
             .buttonStyle(.borderedProminent)
+            .tint(.black)
             .padding()
-                            
+            
+            if let selected = selectedItem {
+                if !selected.isEmpty {
+                    // Display details of selected token
+                    Text("Selected Certificate:")
+                        .font(.headline)
+                    Text("Name:")
+                        .font(.headline)
+                    var commonNameText: String {
+                        cryptoManager.getCertDetails(item: selected)?.commonName ?? "n/a"
+                    }
+                    Text(commonNameText)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                    Text("TokenId:")
+                        .font(.headline)
+                    var tokenObjIdText: String {
+                        cryptoManager.getCertDetails(item: selected)?.tokenObjectId() ?? "n/a"
+                    }
+                    Text(tokenObjIdText)
+                        .font(.subheadline)
+                        .lineLimit(2)
+                } else {
+                    Text("No Certificate Selected")
+                }
+            }
             TextField("Enter message to encrypt", text: $message)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
+                .lineLimit(4)
                 .padding()
-
-//            Button("Encrypt Message") {
-//                cryptoManager.encryptMessage(message)
-//            }
-//            .disabled(message.isEmpty)
-            
-            Button("Encrypt Message (Token)") {
+            Button("Encrypt") {
                 cryptoManager.encryptMessageUsingToken(message)
+                UIApplication.shared.endEditing() // Call to dismiss keyboard
             }
+            .buttonStyle(.borderedProminent)
+            .padding()
             .disabled(message.isEmpty)
 
             if let encrypted = cryptoManager.encryptedMessage {
-                Text("Encrypted Message:\n\(encrypted.base64EncodedString())")
+                Text("Message (plaintext):")
+                    .font(Font.system(size: 16.0))
+                Text(message)
+                    .font(Font.system(size: 12.0).bold())
+                    .padding(5)
+                    .border(.gray)
+                    .padding([.leading, .trailing], 20)
+                Text("Encrypted (cipher text) Message:")
+                    .font(Font.system(size: 16.0))
+                Text(encrypted.base64EncodedString())
                     .font(Font.system(size: 7.0))
+                    .padding(5)
+                    .border(.gray)
+                    .padding([.leading, .trailing], 20)
             }
-
-//            Button("Decrypt Message") {
-//                cryptoManager.decryptMessage()
-//            }
-//            .disabled(cryptoManager.encryptedMessage == nil)
             
-            Button("Decrypt Message (Token)") {
+            Button("Decrypt") {
                 cryptoManager.decryptMessageUsingToken()
             }
+            .buttonStyle(.borderedProminent)
+            .tint(.purple)
+            .padding()
             .disabled(cryptoManager.encryptedMessage == nil)
 
             if let decrypted = cryptoManager.decryptedMessage {
-                Text("Decrypted Message:\n\(decrypted)")
-                    .lineLimit(2)
+                Text("Decrypted Message:")
+                    .font(Font.system(size: 16.0))
+                Text(decrypted)
+                    .font(Font.system(size: 16.0))
+                    .background(.yellow)
+                    .foregroundStyle(.blue.gradient)
+                    .padding(5)
+                    .border(.gray)
+                    .padding([.leading, .trailing], 20)
             }
         }
-        .navigationTitle("")
+        .navigationTitle("Yubico Developer Program")
         .sheet(isPresented: $isShowingTokenDialog) {
             TokenPickerView(tokens: cryptoManager.tokens) { selected in
                 self.selectedItem = selected
                 isShowingTokenDialog = false
             }
         }
-        .padding()
-        .onAppear {
-            cryptoManager.generateKeyPair() // TODO: Just for testing
-        }
     }
-    
-    // TODO: Testing export of this generated pk to share with another user
-    // So they can send encrypted messages (encrypted with this pk) and then decrypted with the private key that only exists on this device.
-//    private func exportPublicKey() -> String? {
-//        guard let privateKey = getPrivateKey() else {
-//            print("Private key not found.")
-//            return nil
-//        }
-//        guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
-//            print("Public key could not be retrieved.")
-//            return nil
-//        }
-//        
-//        var error: Unmanaged<CFError>?
-//        if let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? {
-//            return publicKeyData.base64EncodedString()
-//        } else {
-//            print("Error exporting public key: \(error?.takeRetainedValue().localizedDescription ?? "Unknown error")")
-//            return nil
-//        }
-//    }
 }
 
 struct TokenPickerView: View {
     let tokens: [[String: Any]]
     var onSelect: ([String: Any]) -> Void
+    @StateObject private var cryptoManager = CryptoManager()
     
     var body: some View {
         NavigationView {
@@ -119,10 +121,10 @@ struct TokenPickerView: View {
                         onSelect(tokens[index])
                     }) {
                         VStack(alignment: .leading) {
-                            Text("\(getCertDetails(item: tokens[index])!.commonName)")
+                            Text("\(cryptoManager.getCertDetails(item: tokens[index])!.commonName)")
                                 .font(.headline)
                                 .padding(1)
-                            Text("\(getCertDetails(item: tokens[index])!.tokenObjectId())")
+                            Text("\(cryptoManager.getCertDetails(item: tokens[index])!.tokenObjectId())")
                                 .font(.subheadline)
                                 .lineLimit(2)
                         }
@@ -136,11 +138,12 @@ struct TokenPickerView: View {
             })
         }
     }
-    
-    func getCertDetails(item: [String: Any]) -> SecCertificate? {
-        guard let certData = item["certdata"] as? Data else { return nil }
-        guard let certificate = SecCertificateCreateWithData(nil, certData as CFData) else { return nil }
-        return certificate
+}
+
+// extension for keyboard to dismiss
+extension UIApplication {
+    func endEditing() {
+        sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 
