@@ -2,6 +2,8 @@ import SwiftUI
 import Security
 
 let PRIVATE_KEY_TAG = "com.yubikit.pivcryption.privatekey".data(using: .utf8)!
+//let ENCRYPTION_ALGORITHM: SecKeyAlgorithm = .rsaEncryptionOAEPSHA256
+let ENCRYPTION_ALGORITHM: SecKeyAlgorithm = .rsaEncryptionOAEPSHA256AESGCM // Not working
 
 struct ContentView: View {
     @State private var message: String = ""
@@ -36,7 +38,7 @@ struct ContentView: View {
         }
         .padding()
         .onAppear {
-            //generateKeyPair() // TODO: Just for testing
+            generateKeyPair() // TODO: Just for testing
             fetchTokens()
         }
     }
@@ -54,7 +56,7 @@ struct ContentView: View {
             }
 
             let publicKey = SecKeyCopyPublicKey(privateKey)
-            if let encryptedData = SecKeyCreateEncryptedData(publicKey!, .rsaEncryptionOAEPSHA256AESGCM, messageData as CFData, nil) as Data? {
+            if let encryptedData = SecKeyCreateEncryptedData(publicKey!, ENCRYPTION_ALGORITHM, messageData as CFData, nil) as Data? {
                 self.encryptedMessage = encryptedData
             } else {
                 throw NSError(domain: "EncryptionError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to encrypt data."])
@@ -71,7 +73,7 @@ struct ContentView: View {
         }
 
         do {
-            if let decryptedData = SecKeyCreateDecryptedData(privateKey, .rsaEncryptionOAEPSHA256AESGCM, encryptedMessage as CFData, nil) as Data? {
+            if let decryptedData = SecKeyCreateDecryptedData(privateKey, ENCRYPTION_ALGORITHM, encryptedMessage as CFData, nil) as Data? {
                 self.decryptedMessage = String(data: decryptedData, encoding: .utf8)
             } else {
                 throw NSError(domain: "DecryptionError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to decrypt data."])
@@ -84,8 +86,8 @@ struct ContentView: View {
     private func getPrivateKey() -> SecKey? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
-            //kSecAttrApplicationTag as String: PRIVATE_KEY_TAG,
-            kSecAttrTokenID as String: self.tokenID!,
+            kSecAttrApplicationTag as String: PRIVATE_KEY_TAG,
+            //kSecAttrTokenID as String: self.tokenID!,
             kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
             kSecReturnRef as String: true
         ]
@@ -127,7 +129,7 @@ struct ContentView: View {
     }
     
     // Tokens/Certificates
-        // Fetch all com.apple.token tokens saved to the iOS Keychain by any 3rd party app
+    // Fetch all com.apple.token tokens saved to the iOS Keychain by any 3rd party app
     private func fetchTokens() {
         let query: [String: Any] = [
             kSecAttrAccessGroup as String: kSecAttrAccessGroupToken,
