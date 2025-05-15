@@ -7,6 +7,8 @@ struct ContentView: View {
     @State private var message: String = ""
     @State private var encryptedMessage: Data? = nil
     @State private var decryptedMessage: String? = nil
+    @State private var tokens: [[String: Any]] = []
+    @State private var tokenID: String? = nil
 
     var body: some View {
         VStack(spacing: 20) {
@@ -34,7 +36,8 @@ struct ContentView: View {
         }
         .padding()
         .onAppear {
-            generateKeyPair() // TODO: Just for testing
+            //generateKeyPair() // TODO: Just for testing
+            fetchTokens()
         }
     }
 
@@ -51,7 +54,7 @@ struct ContentView: View {
             }
 
             let publicKey = SecKeyCopyPublicKey(privateKey)
-            if let encryptedData = SecKeyCreateEncryptedData(publicKey!, .rsaEncryptionPKCS1, messageData as CFData, nil) as Data? {
+            if let encryptedData = SecKeyCreateEncryptedData(publicKey!, .rsaEncryptionOAEPSHA256AESGCM, messageData as CFData, nil) as Data? {
                 self.encryptedMessage = encryptedData
             } else {
                 throw NSError(domain: "EncryptionError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to encrypt data."])
@@ -68,7 +71,7 @@ struct ContentView: View {
         }
 
         do {
-            if let decryptedData = SecKeyCreateDecryptedData(privateKey, .rsaEncryptionPKCS1, encryptedMessage as CFData, nil) as Data? {
+            if let decryptedData = SecKeyCreateDecryptedData(privateKey, .rsaEncryptionOAEPSHA256AESGCM, encryptedMessage as CFData, nil) as Data? {
                 self.decryptedMessage = String(data: decryptedData, encoding: .utf8)
             } else {
                 throw NSError(domain: "DecryptionError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to decrypt data."])
@@ -81,7 +84,8 @@ struct ContentView: View {
     private func getPrivateKey() -> SecKey? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: PRIVATE_KEY_TAG,
+            //kSecAttrApplicationTag as String: PRIVATE_KEY_TAG,
+            kSecAttrTokenID as String: self.tokenID!,
             kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
             kSecReturnRef as String: true
         ]
@@ -122,24 +126,47 @@ struct ContentView: View {
         return (privateKey, publicKey)
     }
     
-    // TODO: Testing export of this generated pk to share with another user
-    // So they can send encrypted messages (encrypted with this pk) and then decrypted with the private key that only exists on this device.
-    private func exportPublicKey() -> String? {
-        guard let privateKey = getPrivateKey() else {
-            print("Private key not found.")
-            return nil
-        }
-        guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
-            print("Public key could not be retrieved.")
-            return nil
-        }
+    // Tokens/Certificates
+        // Fetch all com.apple.token tokens saved to the iOS Keychain by any 3rd party app
+    private func fetchTokens() {
+        let query: [String: Any] = [
+            kSecAttrAccessGroup as String: kSecAttrAccessGroupToken,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+            kSecClass as String: kSecClassIdentity,
+            kSecReturnAttributes as String: kCFBooleanTrue as Any,
+            kSecReturnRef as String: kCFBooleanTrue as Any,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnPersistentRef as String: kCFBooleanTrue as Any
+        ]
         
-        var error: Unmanaged<CFError>?
-        if let publicKeyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? {
-            return publicKeyData.base64EncodedString()
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        
+        if status == errSecSuccess, let items = result as? [[String: Any]] {
+            print("Found [\(items.count)] token(s) in the keychain")
+            tokens = items
+            parseTokens(tokens: items)
+            
         } else {
-            print("Error exporting public key: \(error?.takeRetainedValue().localizedDescription ?? "Unknown error")")
-            return nil
+            let errorDescription = SecCopyErrorMessageString(status, nil)
+            print("Error fetching tokens: \(errorDescription ?? "Unknown error" as CFString)")
+            self.tokens = []
+        }
+    }
+    
+    // Parse the token response
+    private func parseTokens(tokens: [[String: Any]]) {
+        print("Parsing tokens...")
+        var tokenCount = 0
+        tokens.forEach { item in
+            tokenCount+=1
+            
+            let tokenMetaData = Token(from: item)
+            self.tokenID = tokenMetaData.tokenID!
+            print("TokenID: \(tokenMetaData.tokenID!)")
+            print("Label: \(tokenMetaData.label!)")
+            print("CanSign: \(tokenMetaData.canSign!)")
+            print("CanDecrypt: \(tokenMetaData.canDecrypt!)")
         }
     }
 }
